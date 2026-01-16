@@ -1,0 +1,23 @@
+# ============================================
+# FRONTEND: pi-client/requirements.txt
+# ============================================
+# Minimal dependencies for Raspberry Pi client
+
+# ===============================
+# Camera (Optional - for Python scripts)
+# ===============================
+opencv-python==4.8.1.78
+numpy==1.26.4
+
+# ===============================
+# API Communication
+# ===============================
+requests==2.31.0
+
+# ===============================
+# Utilities
+# ===============================
+typing-extensions==4.8.0
+
+# Note: Browser handles webcam + auto-discovery
+# These are only for optional Python camera scripts
