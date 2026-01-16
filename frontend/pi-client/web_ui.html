@@ -1,0 +1,607 @@
+<!-- ============================================ -->
+<!-- FRONTEND: pi-client/web_ui.html -->
+<!-- ============================================ -->
+<!-- Smart Frontend with Auto API Discovery -->
+<!-- Works with browser webcam + auto-connects to backend -->
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mango Disease Detection - Client</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #0e1117 0%, #1a1f2e 100%);
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #fbbf24;
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #9ca3af;
+      margin-bottom: 30px;
+    }
+
+    .status-panel {
+      background: #1f2937;
+      border: 2px solid #374151;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .status-indicator {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ef4444;
+      display: inline-block;
+      margin-right: 8px;
+      animation: pulse 2s infinite;
+    }
+
+    .status-indicator.searching {
+      background: #f59e0b;
+    }
+
+    .status-indicator.online {
+      background: #10b981;
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .controls {
+      background: #1f2937;
+      border: 2px solid #374151;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+    }
+
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      transition: all 0.3s;
+      flex: 1;
+      min-width: 140px;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+
+    button:disabled {
+      background: #4b5563;
+      cursor: not-allowed;
+    }
+
+    button.capture { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+    button.diagnose { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    button.clear { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+
+    input[type="file"] {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+      background: #111827;
+      border: 2px dashed #374151;
+      border-radius: 8px;
+      color: #9ca3af;
+      cursor: pointer;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #9ca3af;
+      font-weight: 500;
+    }
+
+    .result-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .image-preview {
+      background: #1f2937;
+      border: 2px solid #374151;
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .image-preview img, .image-preview video {
+      max-width: 100%;
+      max-height: 400px;
+      border-radius: 8px;
+      border: 2px solid #444;
+      display: none;
+    }
+
+    .image-preview img.visible, .image-preview video.visible {
+      display: block;
+      margin: auto;
+    }
+
+    .placeholder {
+      padding: 80px 20px;
+      color: #6b7280;
+      font-size: 18px;
+    }
+
+    .result-panel {
+      background: #1f2937;
+      border: 2px solid #374151;
+      border-radius: 10px;
+      padding: 20px;
+    }
+
+    .result-panel h2 {
+      color: #fbbf24;
+      margin-bottom: 15px;
+      font-size: 1.8em;
+    }
+
+    .result-item {
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #374151;
+    }
+
+    .result-item:last-child {
+      border-bottom: none;
+    }
+
+    .result-item strong {
+      color: #60a5fa;
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .confidence {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #10b981;
+      color: white;
+      border-radius: 20px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 20px;
+      color: #fbbf24;
+    }
+
+    .loading.active { display: block; }
+
+    .spinner {
+      border: 4px solid #374151;
+      border-top: 4px solid #fbbf24;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 768px) {
+      .result-container { grid-template-columns: 1fr; }
+      .button-group { flex-direction: column; }
+      button { width: 100%; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+  <h1>🥭 Mango Disease Detection</h1>
+  <p class="subtitle">Auto-Discovery Client - Works Anywhere</p>
+
+  <!-- Status Panel -->
+  <div class="status-panel">
+    <div class="status-row">
+      <div>
+        <span class="status-indicator" id="statusDot"></span>
+        <span id="statusText">Searching for API...</span>
+      </div>
+      <small id="apiUrl" style="color: #6b7280;">-</small>
+    </div>
+    <div id="discoveryLog" style="font-size: 12px; color: #6b7280; margin-top: 8px;"></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <label for="fileInput">Upload Image:</label>
+    <input type="file" id="fileInput" accept="image/*">
+    
+    <div class="button-group">
+      <button class="capture" onclick="captureFromWebcam()">📷 Capture Webcam</button>
+      <button onclick="uploadImage()">📤 Upload Selected</button>
+      <button class="diagnose" onclick="diagnose()">🔍 Diagnose</button>
+      <button class="clear" onclick="clearAll()">🗑️ Clear</button>
+    </div>
+    
+    <label>
+      <input type="checkbox" id="voiceToggle"> Enable Voice Output
+    </label>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>Processing image...</p>
+  </div>
+
+  <!-- Results -->
+  <div class="result-container">
+    <!-- Image Preview -->
+    <div class="image-preview">
+      <div class="placeholder" id="placeholder">
+        No image loaded<br>
+        <small>Upload or capture an image</small>
+      </div>
+      <video id="webcam" autoplay playsinline></video>
+      <img id="preview" alt="Preview">
+    </div>
+
+    <!-- Diagnosis Result -->
+    <div class="result-panel" id="resultPanel" style="display:none;">
+      <h2 id="diseaseLabel">-</h2>
+      <div class="result-item">
+        <strong>Confidence:</strong>
+        <p id="confidence">-</p>
+      </div>
+      <div class="result-item">
+        <strong>Cause:</strong>
+        <p id="cause">-</p>
+      </div>
+      <div class="result-item">
+        <strong>Treatment:</strong>
+        <p id="treatment">-</p>
+      </div>
+      <div class="result-item">
+        <strong>Prevention:</strong>
+        <p id="prevention">-</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentImageBase64 = null;
+let apiEndpoint = null;
+let webcamStream = null;
+
+// ==================== AUTO API DISCOVERY ====================
+async function discoverAPI() {
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const apiUrl = document.getElementById('apiUrl');
+  const log = document.getElementById('discoveryLog');
+  
+  statusDot.classList.add('searching');
+  statusText.textContent = 'Searching for API...';
+  log.textContent = 'Starting auto-discovery...';
+  
+  const candidates = [
+    'http://localhost:8000',
+    'http://mango-api.local:8000',
+    'http://127.0.0.1:8000'
+  ];
+  
+  // Try each candidate
+  for (let url of candidates) {
+    try {
+      log.textContent = `Trying: ${url}...`;
+      
+      const response = await fetch(`${url}/health`, { 
+        method: 'GET',
+        signal: AbortSignal.timeout(2000) // 2 second timeout
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.status === 'healthy') {
+          apiEndpoint = url;
+          statusDot.classList.remove('searching');
+          statusDot.classList.add('online');
+          statusText.textContent = 'API Connected';
+          apiUrl.textContent = url;
+          log.textContent = `✅ Found at: ${url}`;
+          return true;
+        }
+      }
+    } catch (error) {
+      // Continue to next candidate
+    }
+  }
+  
+  // All failed - scan local network
+  log.textContent = 'Scanning local network...';
+  const localIP = await scanLocalNetwork();
+  
+  if (localIP) {
+    apiEndpoint = `http://${localIP}:8000`;
+    statusDot.classList.remove('searching');
+    statusDot.classList.add('online');
+    statusText.textContent = 'API Connected';
+    apiUrl.textContent = apiEndpoint;
+    log.textContent = `✅ Found at: ${apiEndpoint}`;
+    return true;
+  }
+  
+  // All discovery methods failed
+  statusDot.classList.remove('searching');
+  statusText.textContent = 'API Not Found';
+  log.innerHTML = '❌ Could not find API. Make sure backend is running.<br>Try: python start_server.py';
+  return false;
+}
+
+async function scanLocalNetwork() {
+  // Get browser's local IP hint
+  try {
+    const pc = new RTCPeerConnection();
+    pc.createDataChannel('');
+    
+    return new Promise((resolve) => {
+      pc.createOffer().then(offer => pc.setLocalDescription(offer));
+      
+      pc.onicecandidate = (ice) => {
+        if (!ice || !ice.candidate || !ice.candidate.candidate) {
+          resolve(null);
+          return;
+        }
+        
+        const match = ice.candidate.candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
+        if (match) {
+          const localIP = match[1];
+          const baseIP = localIP.split('.').slice(0, 3).join('.');
+          
+          // Try common host IPs first
+          const commonHosts = [1, 100, 101, 105, 110, 150, 200];
+          
+          for (let host of commonHosts) {
+            const testIP = `${baseIP}.${host}`;
+            
+            fetch(`http://${testIP}:8000/health`, {
+              method: 'GET',
+              signal: AbortSignal.timeout(1000)
+            }).then(r => {
+              if (r.ok) resolve(testIP);
+            }).catch(() => {});
+          }
+        }
+        
+        setTimeout(() => resolve(null), 3000);
+      };
+    });
+  } catch (error) {
+    return null;
+  }
+}
+
+// ==================== WEBCAM CAPTURE ====================
+async function captureFromWebcam() {
+  const video = document.getElementById('webcam');
+  const preview = document.getElementById('preview');
+  const placeholder = document.getElementById('placeholder');
+  
+  try {
+    // Stop existing stream
+    if (webcamStream) {
+      webcamStream.getTracks().forEach(track => track.stop());
+    }
+    
+    // Request webcam
+    webcamStream = await navigator.mediaDevices.getUserMedia({ 
+      video: { facingMode: 'environment' } // Use back camera on mobile
+    });
+    
+    video.srcObject = webcamStream;
+    video.classList.add('visible');
+    preview.classList.remove('visible');
+    placeholder.style.display = 'none';
+    
+    // Auto-capture after 3 seconds
+    setTimeout(() => {
+      captureSnapshot();
+    }, 3000);
+    
+  } catch (error) {
+    alert('Camera access denied or not available.\nPlease allow camera permission or upload an image.');
+  }
+}
+
+function captureSnapshot() {
+  const video = document.getElementById('webcam');
+  const preview = document.getElementById('preview');
+  
+  // Create canvas to capture frame
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+  
+  // Convert to base64
+  currentImageBase64 = canvas.toDataURL('image/jpeg').split(',')[1];
+  
+  // Show preview
+  preview.src = canvas.toDataURL('image/jpeg');
+  preview.classList.add('visible');
+  video.classList.remove('visible');
+  
+  // Stop webcam
+  if (webcamStream) {
+    webcamStream.getTracks().forEach(track => track.stop());
+    webcamStream = null;
+  }
+}
+
+// ==================== FILE UPLOAD ====================
+function uploadImage() {
+  const fileInput = document.getElementById('fileInput');
+  
+  if (!fileInput.files.length) {
+    alert('Please select an image first');
+    return;
+  }
+  
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+  
+  reader.onload = function(e) {
+    currentImageBase64 = e.target.result.split(',')[1];
+    
+    const preview = document.getElementById('preview');
+    preview.src = e.target.result;
+    preview.classList.add('visible');
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('webcam').classList.remove('visible');
+  };
+  
+  reader.readAsDataURL(file);
+}
+
+// ==================== DIAGNOSIS ====================
+async function diagnose() {
+  if (!currentImageBase64) {
+    alert('Please upload or capture an image first');
+    return;
+  }
+  
+  if (!apiEndpoint) {
+    alert('API not connected. Please wait for discovery or refresh page.');
+    return;
+  }
+  
+  const voiceEnabled = document.getElementById('voiceToggle').checked;
+  const loading = document.getElementById('loading');
+  const resultPanel = document.getElementById('resultPanel');
+  
+  loading.classList.add('active');
+  resultPanel.style.display = 'none';
+  
+  try {
+    const response = await fetch(`${apiEndpoint}/diagnose`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image: currentImageBase64,
+        enable_voice: voiceEnabled
+      })
+    });
+    
+    const data = await response.json();
+    loading.classList.remove('active');
+    
+    if (data.status === 'success') {
+      document.getElementById('diseaseLabel').textContent = data.predicted_label;
+      document.getElementById('confidence').innerHTML = 
+        (data.confidence * 100).toFixed(2) + '%' +
+        '<span class="confidence">' + 
+        (data.confidence > 0.8 ? 'High' : data.confidence > 0.5 ? 'Medium' : 'Low') + 
+        '</span>';
+      document.getElementById('cause').textContent = data.cause;
+      document.getElementById('treatment').textContent = data.treatment;
+      document.getElementById('prevention').textContent = data.prevention;
+      
+      resultPanel.style.display = 'block';
+    } else {
+      alert('Diagnosis failed: ' + (data.cause || 'Unknown error'));
+    }
+    
+  } catch (error) {
+    loading.classList.remove('active');
+    alert('Error connecting to API: ' + error.message);
+  }
+}
+
+// ==================== CLEAR ====================
+function clearAll() {
+  currentImageBase64 = null;
+  
+  const preview = document.getElementById('preview');
+  const video = document.getElementById('webcam');
+  
+  preview.src = '';
+  preview.classList.remove('visible');
+  video.classList.remove('visible');
+  
+  if (webcamStream) {
+    webcamStream.getTracks().forEach(track => track.stop());
+    webcamStream = null;
+  }
+  
+  document.getElementById('placeholder').style.display = 'block';
+  document.getElementById('resultPanel').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+// ==================== INIT ====================
+window.onload = function() {
+  discoverAPI();
+};
+</script>
+
+</body>
+</html>
