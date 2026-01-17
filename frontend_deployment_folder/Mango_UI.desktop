@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Mango Disease Detection
+Comment=Start Mango Detection UI
+Exec=bash -c "cd /home/pi/Desktop/frontend_deployment_folder && source venv/bin/activate && python open_ui.py"
+Icon=/home/pi/Desktop/frontend_deployment_folder/mango-pi.png
+Terminal=true
+Categories=Application;
+Name[en_GB]=Mango_Disease_Detection.desktop

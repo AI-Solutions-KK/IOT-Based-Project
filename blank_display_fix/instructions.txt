@@ -1,0 +1,1 @@
+use card reader insert card - connect to pc - open boot folder - find these files and replace with this

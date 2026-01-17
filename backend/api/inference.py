@@ -1,4 +1,6 @@
-# api/inference.py
+# ============================================
+# BACKEND: api/inference.py
+# ============================================
 # ML Inference Engine - TFLite EfficientNetV2 + SVM
 # Cloud-compatible (No camera dependencies)
 
@@ -127,6 +129,29 @@ def predict_image(image_path):
 
         label = le.inverse_transform([idx])[0]
         confidence = float(probs[idx])
+
+        # ================= REJECTION LOGIC =================
+        # Reject if confidence too low (blank/non-leaf images)
+        if confidence < 0.50:
+            return {
+                "status": "rejected",
+                "predicted_label": "No Valid Leaf Detected",
+                "confidence": round(confidence, 4),
+                "cause": "Image does not appear to be a mango leaf or confidence too low.",
+                "treatment": "Please capture a clear image of a mango leaf",
+                "prevention": "Ensure proper lighting and leaf is clearly visible"
+            }
+
+        # Additional check: If "Healthy" with low confidence, likely not a leaf
+        if label == "Healthy" and confidence < 0.6:
+            return {
+                "status": "rejected",
+                "predicted_label": "Unclear Image",
+                "confidence": round(confidence, 4),
+                "cause": "Image quality insufficient for accurate diagnosis.",
+                "treatment": "Recapture with better focus on the leaf",
+                "prevention": "Hold camera steady and ensure good lighting"
+            }
 
         # Get treatment info
         info = DISEASE_TREATMENT.get(label, DISEASE_TREATMENT["Healthy"])

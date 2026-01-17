@@ -1,8 +1,7 @@
 <!-- ============================================ -->
 <!-- FRONTEND: pi-client/web_ui.html -->
 <!-- ============================================ -->
-<!-- Smart Frontend with Auto API Discovery -->
-<!-- Works with browser webcam + auto-connects to backend -->
+<!-- Smart Frontend with Manual IP Entry + Auto Camera Detection -->
 
 <!DOCTYPE html>
 <html>
@@ -11,11 +10,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mango Disease Detection - Client</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       font-family: 'Segoe UI', Arial, sans-serif;
@@ -25,10 +20,7 @@
       padding: 20px;
     }
 
-    .container {
-      max-width: 1100px;
-      margin: auto;
-    }
+    .container { max-width: 1100px; margin: auto; }
 
     h1 {
       text-align: center;
@@ -69,10 +61,6 @@
       animation: pulse 2s infinite;
     }
 
-    .status-indicator.searching {
-      background: #f59e0b;
-    }
-
     .status-indicator.online {
       background: #10b981;
       animation: none;
@@ -81,6 +69,39 @@
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
+    }
+
+    .ip-input-box {
+      background: #111827;
+      border: 2px solid #374151;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 10px;
+    }
+
+    .ip-input-box input {
+      width: 100%;
+      padding: 10px;
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 6px;
+      color: white;
+      font-size: 16px;
+      font-family: monospace;
+    }
+
+    .ip-input-box button {
+      margin-top: 10px;
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+
+    .ip-help {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 8px;
+      line-height: 1.5;
     }
 
     .controls {
@@ -252,18 +273,37 @@
 <body>
 <div class="container">
   <h1>🥭 Mango Disease Detection</h1>
-  <p class="subtitle">Auto-Discovery Client - Works Anywhere</p>
+  <p class="subtitle">Raspberry Pi Client → PC Backend</p>
 
   <!-- Status Panel -->
   <div class="status-panel">
     <div class="status-row">
       <div>
         <span class="status-indicator" id="statusDot"></span>
-        <span id="statusText">Searching for API...</span>
+        <span id="statusText">Not Connected</span>
       </div>
       <small id="apiUrl" style="color: #6b7280;">-</small>
     </div>
-    <div id="discoveryLog" style="font-size: 12px; color: #6b7280; margin-top: 8px;"></div>
+    
+    <!-- Manual IP Entry -->
+    <div class="ip-input-box" id="ipInputBox">
+      <label style="color: #fbbf24; font-size: 14px;">🌐 Enter Backend Server IP:</label>
+      <input 
+        type="text" 
+        id="backendIP" 
+        placeholder="Example: 10.212.97.130:8000"
+        value=""
+      >
+      <button onclick="connectToBackend()">Connect to Backend</button>
+      
+      <div class="ip-help">
+        💡 <strong>How to find Backend IP:</strong><br>
+        • Look at your PC terminal where backend is running<br>
+        • Copy the "Direct IP" address (e.g., 10.212.97.130:8000)<br>
+        • Paste it above and click Connect<br>
+        • ⚠️ Do NOT use "mDNS Name" or "Localhost"
+      </div>
+    </div>
   </div>
 
   <!-- Controls -->
@@ -272,14 +312,14 @@
     <input type="file" id="fileInput" accept="image/*">
     
     <div class="button-group">
-      <button class="capture" onclick="captureFromWebcam()">📷 Capture Webcam</button>
+      <button class="capture" onclick="captureFromWebcam()">📷 Capture Camera</button>
       <button onclick="uploadImage()">📤 Upload Selected</button>
       <button class="diagnose" onclick="diagnose()">🔍 Diagnose</button>
       <button class="clear" onclick="clearAll()">🗑️ Clear</button>
     </div>
     
     <label>
-      <input type="checkbox" id="voiceToggle"> Enable Voice Output
+      <input type="checkbox" id="voiceToggle"> 🔊 Enable Voice Output
     </label>
   </div>
 
@@ -305,19 +345,19 @@
     <div class="result-panel" id="resultPanel" style="display:none;">
       <h2 id="diseaseLabel">-</h2>
       <div class="result-item">
-        <strong>Confidence:</strong>
+        <strong>📊 Confidence:</strong>
         <p id="confidence">-</p>
       </div>
       <div class="result-item">
-        <strong>Cause:</strong>
+        <strong>🔍 Cause:</strong>
         <p id="cause">-</p>
       </div>
       <div class="result-item">
-        <strong>Treatment:</strong>
+        <strong>💊 Treatment:</strong>
         <p id="treatment">-</p>
       </div>
       <div class="result-item">
-        <strong>Prevention:</strong>
+        <strong>🛡️ Prevention:</strong>
         <p id="prevention">-</p>
       </div>
     </div>
@@ -329,130 +369,103 @@ let currentImageBase64 = null;
 let apiEndpoint = null;
 let webcamStream = null;
 
-// ==================== AUTO API DISCOVERY ====================
-async function discoverAPI() {
+// ==================== CONNECT TO BACKEND ====================
+async function connectToBackend() {
+  const ipInput = document.getElementById('backendIP').value.trim();
   const statusDot = document.getElementById('statusDot');
   const statusText = document.getElementById('statusText');
   const apiUrl = document.getElementById('apiUrl');
-  const log = document.getElementById('discoveryLog');
   
-  statusDot.classList.add('searching');
-  statusText.textContent = 'Searching for API...';
-  log.textContent = 'Starting auto-discovery...';
-  
-  const candidates = [
-    'http://localhost:8000',
-    'http://mango-api.local:8000',
-    'http://127.0.0.1:8000'
-  ];
-  
-  // Try each candidate
-  for (let url of candidates) {
-    try {
-      log.textContent = `Trying: ${url}...`;
-      
-      const response = await fetch(`${url}/health`, { 
-        method: 'GET',
-        signal: AbortSignal.timeout(2000) // 2 second timeout
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (data.status === 'healthy') {
-          apiEndpoint = url;
-          statusDot.classList.remove('searching');
-          statusDot.classList.add('online');
-          statusText.textContent = 'API Connected';
-          apiUrl.textContent = url;
-          log.textContent = `✅ Found at: ${url}`;
-          return true;
-        }
-      }
-    } catch (error) {
-      // Continue to next candidate
-    }
+  if (!ipInput) {
+    alert('Please enter backend IP address');
+    return;
   }
   
-  // All failed - scan local network
-  log.textContent = 'Scanning local network...';
-  const localIP = await scanLocalNetwork();
-  
-  if (localIP) {
-    apiEndpoint = `http://${localIP}:8000`;
-    statusDot.classList.remove('searching');
-    statusDot.classList.add('online');
-    statusText.textContent = 'API Connected';
-    apiUrl.textContent = apiEndpoint;
-    log.textContent = `✅ Found at: ${apiEndpoint}`;
-    return true;
+  // Add http:// if not present
+  let url = ipInput;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'http://' + url;
   }
   
-  // All discovery methods failed
-  statusDot.classList.remove('searching');
-  statusText.textContent = 'API Not Found';
-  log.innerHTML = '❌ Could not find API. Make sure backend is running.<br>Try: python start_server.py';
-  return false;
-}
-
-async function scanLocalNetwork() {
-  // Get browser's local IP hint
+  // Remove trailing slash
+  url = url.replace(/\/$/, '');
+  
+  statusText.textContent = 'Connecting...';
+  
   try {
-    const pc = new RTCPeerConnection();
-    pc.createDataChannel('');
-    
-    return new Promise((resolve) => {
-      pc.createOffer().then(offer => pc.setLocalDescription(offer));
-      
-      pc.onicecandidate = (ice) => {
-        if (!ice || !ice.candidate || !ice.candidate.candidate) {
-          resolve(null);
-          return;
-        }
-        
-        const match = ice.candidate.candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
-        if (match) {
-          const localIP = match[1];
-          const baseIP = localIP.split('.').slice(0, 3).join('.');
-          
-          // Try common host IPs first
-          const commonHosts = [1, 100, 101, 105, 110, 150, 200];
-          
-          for (let host of commonHosts) {
-            const testIP = `${baseIP}.${host}`;
-            
-            fetch(`http://${testIP}:8000/health`, {
-              method: 'GET',
-              signal: AbortSignal.timeout(1000)
-            }).then(r => {
-              if (r.ok) resolve(testIP);
-            }).catch(() => {});
-          }
-        }
-        
-        setTimeout(() => resolve(null), 3000);
-      };
+    const response = await fetch(`${url}/health`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000)
     });
+    
+    const data = await response.json();
+    
+    if (data.status === 'healthy') {
+      apiEndpoint = url;
+      statusDot.classList.add('online');
+      statusText.textContent = '✅ Connected';
+      apiUrl.textContent = url;
+      
+      // Hide IP input box
+      document.getElementById('ipInputBox').style.display = 'none';
+      
+      alert('✅ Connected to backend successfully!');
+    } else {
+      throw new Error('Backend not healthy');
+    }
+    
   } catch (error) {
-    return null;
+    statusDot.classList.remove('online');
+    statusText.textContent = '❌ Connection Failed';
+    alert(
+      '❌ Connection Failed\n\n' +
+      'Please check:\n' +
+      '• Backend server is running on PC\n' +
+      '• IP address is correct (e.g., 10.212.97.130:8000)\n' +
+      '• Both devices on same WiFi\n\n' +
+      'Error: ' + error.message
+    );
   }
 }
 
+// ==================== WEBCAM CAPTURE ====================
 // ==================== WEBCAM CAPTURE ====================
 async function captureFromWebcam() {
   const video = document.getElementById('webcam');
   const preview = document.getElementById('preview');
   const placeholder = document.getElementById('placeholder');
   
+  // Try local camera server first (CSI/USB) - WITH LIVE STREAM
   try {
-    // Stop existing stream
+    const infoResponse = await fetch('http://localhost:5001/camera-info');
+    const cameraInfo = await infoResponse.json();
+    
+    if (cameraInfo.available) {
+      // Show live stream from camera server
+      video.src = 'http://localhost:5001/video_feed';
+      video.classList.add('visible');
+      preview.classList.remove('visible');
+      placeholder.style.display = 'none';
+      
+      // Wait 10 seconds for user to adjust focus
+      setTimeout(() => {
+        captureFromServer();
+      }, 10000);
+      
+      return;
+    }
+  } catch (serverError) {
+    console.log('Camera server not available, trying browser...');
+  }
+  
+  // Fallback: Browser webcam
+  try {
     if (webcamStream) {
       webcamStream.getTracks().forEach(track => track.stop());
     }
     
-    // Request webcam
     webcamStream = await navigator.mediaDevices.getUserMedia({ 
-      video: { facingMode: 'environment' } // Use back camera on mobile
+      video: true
     });
     
     video.srcObject = webcamStream;
@@ -460,13 +473,44 @@ async function captureFromWebcam() {
     preview.classList.remove('visible');
     placeholder.style.display = 'none';
     
-    // Auto-capture after 3 seconds
     setTimeout(() => {
       captureSnapshot();
-    }, 3000);
+    }, 10000);
     
   } catch (error) {
-    alert('Camera access denied or not available.\nPlease allow camera permission or upload an image.');
+    alert(
+      '📷 Camera Not Available\n\n' +
+      'Make sure camera server is running:\n' +
+      'Terminal should show "Camera server ready"\n\n' +
+      'Or use Upload feature instead.'
+    );
+  }
+}
+
+// NEW FUNCTION - Capture from camera server
+async function captureFromServer() {
+  const video = document.getElementById('webcam');
+  const preview = document.getElementById('preview');
+  
+  try {
+    const response = await fetch('http://localhost:5001/capture', {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      currentImageBase64 = data.base64;
+      preview.src = 'data:image/jpeg;base64,' + data.base64;
+      preview.classList.add('visible');
+      video.classList.remove('visible');
+      video.src = '';  // Stop stream
+      
+      console.log(`✅ Captured from: ${data.camera_type}`);
+    }
+  } catch (error) {
+    alert('Capture failed: ' + error.message);
   }
 }
 
@@ -474,7 +518,6 @@ function captureSnapshot() {
   const video = document.getElementById('webcam');
   const preview = document.getElementById('preview');
   
-  // Create canvas to capture frame
   const canvas = document.createElement('canvas');
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
@@ -482,21 +525,17 @@ function captureSnapshot() {
   const ctx = canvas.getContext('2d');
   ctx.drawImage(video, 0, 0);
   
-  // Convert to base64
   currentImageBase64 = canvas.toDataURL('image/jpeg').split(',')[1];
   
-  // Show preview
   preview.src = canvas.toDataURL('image/jpeg');
   preview.classList.add('visible');
   video.classList.remove('visible');
   
-  // Stop webcam
   if (webcamStream) {
     webcamStream.getTracks().forEach(track => track.stop());
     webcamStream = null;
   }
 }
-
 // ==================== FILE UPLOAD ====================
 function uploadImage() {
   const fileInput = document.getElementById('fileInput');
@@ -530,7 +569,7 @@ async function diagnose() {
   }
   
   if (!apiEndpoint) {
-    alert('API not connected. Please wait for discovery or refresh page.');
+    alert('⚠️ Not connected to backend!\n\nPlease enter backend IP address first.');
     return;
   }
   
@@ -596,11 +635,6 @@ function clearAll() {
   document.getElementById('resultPanel').style.display = 'none';
   document.getElementById('fileInput').value = '';
 }
-
-// ==================== INIT ====================
-window.onload = function() {
-  discoverAPI();
-};
 </script>
 
 </body>
