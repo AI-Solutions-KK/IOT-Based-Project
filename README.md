@@ -1,9 +1,19 @@
 
-# 🥭 Mango Disease Detection System
+# 🥭 IOT BASED - Image Processing Project
+## Mango Disease Detection System
 
 **AI-Powered Plant Disease Diagnosis with Edge Computing**
 
 A production-ready IoT solution that combines deep learning, edge AI, and cloud deployment for real-time mango disease detection using Raspberry Pi and cloud infrastructure.
+
+---
+
+![snap1](snap4.jpg)
+---
+![snap1](snap2.png)
+
+---
+![snap1](snap3.jpg)
 
 ---
 
