@@ -298,26 +298,14 @@
     <div class="status-row">
       <div>
         <span class="status-indicator" id="statusDot"></span>
-        <span id="statusText">Not Connected</span>
+        <span id="statusText">Connecting...</span>
       </div>
       <small id="apiUrl" style="color: #6b7280;">-</small>
     </div>
     
-    <!-- Connection Buttons -->
-    <div style="display: flex; gap: 10px; margin-top: 10px;">
-      <button onclick="connectToCloud()" style="flex: 1; min-width: auto;">☁️ Connect Cloud</button>
-      <button onclick="showLocalInput()" style="flex: 1; min-width: auto;">🏠 Connect Local</button>
-    </div>
-    
     <!-- Manual IP Entry (hidden by default) -->
     <div class="ip-input-box" id="ipInputBox" style="display:none;">
-      <label style="color: #fbbf24; font-size: 14px;">🌐 Enter Local PC IP:</label>
-      
-      <!-- Saved IPs dropdown -->
-      <select id="savedIPs" style="width: 100%; padding: 10px; background: #1f2937; border: 1px solid #374151; border-radius: 6px; color: white; font-size: 14px; margin-bottom: 10px;" onchange="fillSavedIP()">
-        <option value="">-- Select from history --</option>
-      </select>
-      
+      <label style="color: #fbbf24; font-size: 14px;">🌐 Enter Local PC IP (if cloud fails):</label>
       <input 
         type="text" 
         id="backendIP" 
@@ -400,98 +388,76 @@ let apiEndpoint = null;
 let webcamStream = null;
 
 // Cloud API URL (HuggingFace)
-const CLOUD_API = 'https://AI-Solutions-KK-mango-disease-api.hf.space';
-const API_KEY = 'hf_your_api_key_here'; // Replace with your actual HF API key (optional for private spaces)
+const CLOUD_API = 'https://ai-solutions-kk-mango-disease-api.hf.space';
 
 // ==================== AUTO-CONNECT ON LOAD ====================
 window.onload = function() {
-  loadSavedIPs();
-  // Don't auto-connect, wait for user to click button
+  autoConnectBackend();
 };
 
-// Load saved IPs from localStorage
-function loadSavedIPs() {
-  const savedIPs = JSON.parse(localStorage.getItem('savedIPs') || '[]');
-  const select = document.getElementById('savedIPs');
-  
-  savedIPs.forEach(ip => {
-    const option = document.createElement('option');
-    option.value = ip;
-    option.textContent = ip;
-    select.appendChild(option);
-  });
-}
-
-// Fill input with selected saved IP
-function fillSavedIP() {
-  const select = document.getElementById('savedIPs');
-  const input = document.getElementById('backendIP');
-  if (select.value) {
-    input.value = select.value;
-  }
-}
-
-// Save IP to history
-function saveIPToHistory(ip) {
-  let savedIPs = JSON.parse(localStorage.getItem('savedIPs') || '[]');
-  if (!savedIPs.includes(ip)) {
-    savedIPs.unshift(ip); // Add to beginning
-    if (savedIPs.length > 5) savedIPs.pop(); // Keep only last 5
-    localStorage.setItem('savedIPs', JSON.stringify(savedIPs));
-  }
-}
-
-// Show local IP input box
-function showLocalInput() {
-  document.getElementById('ipInputBox').style.display = 'block';
-}
-
-// Connect to cloud
-async function connectToCloud() {
+async function autoConnectBackend() {
   const statusDot = document.getElementById('statusDot');
   const statusText = document.getElementById('statusText');
   const apiUrl = document.getElementById('apiUrl');
   const ipInputBox = document.getElementById('ipInputBox');
   
   statusText.textContent = 'Connecting to Cloud...';
-  ipInputBox.style.display = 'none';
   
+  // Try Cloud API first
   try {
-    // Try with API key header if key is set
-    const headers = {
-      'Content-Type': 'application/json'
-    };
-    
-    if (API_KEY && API_KEY !== 'hf_your_api_key_here') {
-      headers['Authorization'] = `Bearer ${API_KEY}`;
-    }
-    
     const response = await fetch(`${CLOUD_API}/health`, {
       method: 'GET',
-      headers: headers,
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(5000)
     });
     
     const data = await response.json();
     
     if (data.status === 'healthy') {
       apiEndpoint = CLOUD_API;
-      statusDot.classList.remove('fallback');
       statusDot.classList.add('online');
       statusText.textContent = '☁️ Cloud Connected';
       apiUrl.textContent = 'HuggingFace Cloud';
-      alert('✅ Connected to Cloud API!');
       return;
     }
   } catch (cloudError) {
-    console.error('Cloud connection failed:', cloudError);
+    console.log('Cloud API unavailable, trying local...');
   }
   
-  // Failed
+  // Fallback: Try common local IPs
+  statusText.textContent = 'Cloud offline, scanning local network...';
+  
+  const localIPs = [
+    'http://localhost:8000',
+    'http://mango-api.local:8000',
+    'http://127.0.0.1:8000'
+  ];
+  
+  for (let url of localIPs) {
+    try {
+      const response = await fetch(`${url}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(2000)
+      });
+      
+      const data = await response.json();
+      
+      if (data.status === 'healthy') {
+        apiEndpoint = url;
+        statusDot.classList.add('fallback');
+        statusText.textContent = '🏠 Local PC Connected';
+        apiUrl.textContent = url;
+        return;
+      }
+    } catch (error) {
+      continue;
+    }
+  }
+  
+  // All failed - show manual input
   statusDot.classList.remove('online', 'fallback');
-  statusText.textContent = '❌ Cloud Offline';
-  apiUrl.textContent = 'Connection failed';
-  alert('❌ Cloud API unavailable.\n\nTry:\n1. Check if Space is running\n2. Use "Connect Local" for local PC');
+  statusText.textContent = '❌ Not Connected';
+  apiUrl.textContent = 'Cloud & Local offline';
+  ipInputBox.style.display = 'block';
 }
 
 // Manual connection
@@ -525,14 +491,10 @@ async function connectManual() {
     
     if (data.status === 'healthy') {
       apiEndpoint = url;
-      statusDot.classList.remove('online');
       statusDot.classList.add('fallback');
       statusText.textContent = '🏠 Local PC Connected';
       apiUrl.textContent = url;
       ipInputBox.style.display = 'none';
-      
-      // Save to history
-      saveIPToHistory(ipInput);
       
       alert('✅ Connected to local backend!');
     } else {
@@ -689,8 +651,12 @@ async function diagnose() {
   }
   
   if (!apiEndpoint) {
-    alert('⚠️ Not connected to backend!\n\nPlease click "Connect Cloud" or "Connect Local" first.');
-    return;
+    alert('⚠️ Not connected to backend!\n\nTrying to reconnect...');
+    await autoConnectBackend();
+    if (!apiEndpoint) {
+      alert('Connection failed. Please enter local PC IP manually.');
+      return;
+    }
   }
   
   const voiceEnabled = document.getElementById('voiceToggle').checked;
@@ -701,16 +667,9 @@ async function diagnose() {
   resultPanel.style.display = 'none';
   
   try {
-    // Add API key for cloud requests (if private space)
-    const headers = { 'Content-Type': 'application/json' };
-    
-    if (apiEndpoint === CLOUD_API && API_KEY && API_KEY !== 'hf_your_api_key_here') {
-      headers['Authorization'] = `Bearer ${API_KEY}`;
-    }
-    
     const response = await fetch(`${apiEndpoint}/diagnose`, {
       method: 'POST',
-      headers: headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         image: currentImageBase64,
         enable_voice: voiceEnabled
@@ -738,7 +697,8 @@ async function diagnose() {
     
   } catch (error) {
     loading.classList.remove('active');
-    alert('Error: ' + error.message + '\n\nPlease reconnect using Cloud or Local button.');
+    alert('Error: ' + error.message + '\n\nTrying to reconnect...');
+    await autoConnectBackend();
   }
 }
 
